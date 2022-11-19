@@ -109,73 +109,74 @@ if args.checkpoint:
     last_epoch = args.checkpoint
     scheduler.last_epoch = last_epoch - 1
 
-for epoch in range(last_epoch + 1, args.max_epochs + 1):
+with torch.no_grad():
+    for epoch in range(last_epoch + 1, args.max_epochs + 1):
 
-    scheduler.step()
+        scheduler.step()
 
-    for batch, data in enumerate(train_loader):
-        batch_t0 = time.time()
+        for batch, data in enumerate(train_loader):
+            batch_t0 = time.time()
 
-        ## init lstm state
-        encoder_h_1 = (Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()),
-                       Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()))
-        encoder_h_2 = (Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()),
-                       Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()))
-        encoder_h_3 = (Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()),
-                       Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()))
+            ## init lstm state
+            encoder_h_1 = (Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()),
+                        Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()))
+            encoder_h_2 = (Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()),
+                        Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()))
+            encoder_h_3 = (Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()),
+                        Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()))
 
-        decoder_h_1 = (Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()),
-                       Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()))
-        decoder_h_2 = (Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()),
-                       Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()))
-        decoder_h_3 = (Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()),
-                       Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()))
-        decoder_h_4 = (Variable(torch.zeros(data.size(0), 128, 16, 16).cuda()),
-                       Variable(torch.zeros(data.size(0), 128, 16, 16).cuda()))
+            decoder_h_1 = (Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()),
+                        Variable(torch.zeros(data.size(0), 512, 2, 2).cuda()))
+            decoder_h_2 = (Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()),
+                        Variable(torch.zeros(data.size(0), 512, 4, 4).cuda()))
+            decoder_h_3 = (Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()),
+                        Variable(torch.zeros(data.size(0), 256, 8, 8).cuda()))
+            decoder_h_4 = (Variable(torch.zeros(data.size(0), 128, 16, 16).cuda()),
+                        Variable(torch.zeros(data.size(0), 128, 16, 16).cuda()))
 
-        patches = Variable(data.cuda())
+            patches = Variable(data.cuda())
 
-        solver.zero_grad()
+            solver.zero_grad()
 
-        losses = []
+            losses = []
 
-        res = patches - 0.5
+            res = patches - 0.5
 
-        bp_t0 = time.time()
+            bp_t0 = time.time()
 
-        for _ in range(args.iterations):
-            encoded, encoder_h_1, encoder_h_2, encoder_h_3 = encoder(
-                res, encoder_h_1, encoder_h_2, encoder_h_3)
+            for _ in range(args.iterations):
+                encoded, encoder_h_1, encoder_h_2, encoder_h_3 = encoder(
+                    res, encoder_h_1, encoder_h_2, encoder_h_3)
 
-            codes = binarizer(encoded)
+                codes = binarizer(encoded)
 
-            output, decoder_h_1, decoder_h_2, decoder_h_3, decoder_h_4 = decoder(
-                codes, decoder_h_1, decoder_h_2, decoder_h_3, decoder_h_4)
+                output, decoder_h_1, decoder_h_2, decoder_h_3, decoder_h_4 = decoder(
+                    codes, decoder_h_1, decoder_h_2, decoder_h_3, decoder_h_4)
 
-            res = res - output
-            losses.append(res.abs().mean())
+                res = res - output
+                losses.append(res.abs().mean())
 
-        bp_t1 = time.time()
+            bp_t1 = time.time()
 
-        loss = sum(losses) / args.iterations
-        loss.backward()
+            loss = sum(losses) / args.iterations
+            loss.backward()
 
-        solver.step()
+            solver.step()
 
-        batch_t1 = time.time()
+            batch_t1 = time.time()
 
-        print(
-            '[TRAIN] Epoch[{}]({}/{}); Loss: {:.6f}; Backpropagation: {:.4f} sec; Batch: {:.4f} sec'.
-            format(epoch, batch + 1,
-                   len(train_loader), loss.data[0], bp_t1 - bp_t0, batch_t1 -
-                   batch_t0))
-        print(('{:.4f} ' * args.iterations +
-               '\n').format(* [l.data[0] for l in losses]))
+            print(
+                '[TRAIN] Epoch[{}]({}/{}); Loss: {:.6f}; Backpropagation: {:.4f} sec; Batch: {:.4f} sec'.
+                format(epoch, batch + 1,
+                    len(train_loader), loss.data.item(), bp_t1 - bp_t0, batch_t1 -
+                    batch_t0))
+            print(('{:.4f} ' * args.iterations +
+                '\n').format(* [l.data.item() for l in losses]))
 
-        index = (epoch - 1) * len(train_loader) + batch
+            index = (epoch - 1) * len(train_loader) + batch
 
-        ## save checkpoint every 500 training steps
-        if index % 500 == 0:
-            save(0, False)
+            ## save checkpoint every 500 training steps
+            if index % 500 == 0:
+                save(0, False)
 
-    save(epoch)
+        save(epoch)

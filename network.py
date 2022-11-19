@@ -59,7 +59,7 @@ class Binarizer(nn.Module):
 
     def forward(self, input):
         feat = self.conv(input)
-        x = F.tanh(feat)
+        x = torch.tanh(feat)
         return self.sign(x)
 
 
